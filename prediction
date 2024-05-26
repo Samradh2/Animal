@@ -1,0 +1,128 @@
+import pandas as pd
+import re
+from sklearn.preprocessing import LabelEncoder
+from sklearn.tree import DecisionTreeClassifier
+
+# Load the dataset
+df = pd.read_csv("Animal Dataset.csv")
+
+# Function to convert range strings to their average
+def range_to_average(value):
+    if isinstance(value, str):
+        if 'Up to' in value:
+            # Handle "Up to" cases
+            number = re.findall(r'\d+', value)
+            return int(number[0]) if number else None
+        elif '-' in value:
+            # Extract numbers from the range string
+            numbers = re.findall(r'\d+', value)
+            if len(numbers) == 2:
+                # Calculate the average of the two numbers
+                return (int(numbers[0]) + int(numbers[1])) / 2
+            else:
+                return None
+        elif value.lower() == 'not applicable':
+            return None
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return None
+
+# List of columns to clean
+columns_to_clean = [
+    'Height (cm)', 'Weight (kg)', 'Lifespan (years)', 
+    'Average Speed (km/h)', 'Gestation Period (days)', 'Offspring per Birth', 'Top Speed (km/h)'
+]
+
+# Apply the range_to_average function to the specified columns
+for column in columns_to_clean:
+    df[column] = df[column].apply(range_to_average)
+
+# Drop rows with missing values
+df_cleaned = df.dropna()
+
+# Define the target variable and features
+target = 'Conservation Status'
+features = df_cleaned.drop(columns=[target, 'Animal', 'Countries Found', 'Predators', 'Color', 'Diet', 'Habitat', 'Family', 'Social Structure'])
+
+# Encode the target variable
+le = LabelEncoder()
+df_cleaned[target] = le.fit_transform(df_cleaned[target])
+
+# Initialize the Decision Tree Classifier
+clf = DecisionTreeClassifier(random_state=42)
+
+# Split the data into training and test sets
+X = features
+y = df_cleaned[target]
+
+# Train the model
+clf.fit(X, y)
+
+# Function to preprocess input data
+def preprocess_input_data(input_data):
+    input_features = input_data.copy()
+    
+    # Apply range_to_average function to specified columns
+    for column in columns_to_clean:
+        input_features[column] = input_features[column].apply(range_to_average)
+    
+    # Drop any rows with missing values
+    input_features = input_features.dropna()
+    
+    # Return the preprocessed input features
+    return input_features
+
+# Function to predict Conservation Status
+def predict_conservation_status(input_data):
+    # Preprocess the input data
+    input_features = preprocess_input_data(input_data)
+    
+    if input_features.empty:
+        return "Insufficient data to make a prediction."
+    
+    try:
+        # Ensure columns are in the same order as during training
+        input_features = input_features[X.columns]
+        
+        # Make predictions using the trained model
+        predictions = clf.predict(input_features)
+        
+        # Inverse transform the encoded predictions to get original labels
+        predicted_labels = le.inverse_transform(predictions)
+        
+        return predicted_labels[0]  # Return the predicted conservation status
+    except Exception as e:
+        return f"Prediction failed: {str(e)}"
+
+# Function to take animal name and features as input from the user
+def get_user_input():
+    animal_name = input("Enter the animal name: ").strip().lower()  # Convert to lowercase for case insensitivity
+    
+    if animal_name not in df_cleaned['Animal'].str.lower().unique():
+        return None, "Animal not found in the dataset."
+    
+    input_data = {}
+    for column in columns_to_clean:
+        input_value = input(f"Enter {column}: ").strip()  # Remove leading/trailing whitespace
+        input_data[column] = [input_value]
+    
+    return animal_name, input_data
+
+# Main function to perform prediction
+def main():
+    animal_name, input_data = get_user_input()
+    
+    if animal_name is None:
+        print(input_data)  # Print error message
+    else:
+        # Convert input data to a DataFrame
+        input_df = pd.DataFrame(input_data)
+        
+        # Predict Conservation Status
+        predicted_status = predict_conservation_status(input_df)
+        print(f"Predicted Conservation Status for '{animal_name}': {predicted_status}")
+
+# Run the main function
+if _name_ == "_main_":
+    main()
